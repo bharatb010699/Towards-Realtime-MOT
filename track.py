@@ -1,3 +1,4 @@
+# Libraries required
 import os
 import os.path as osp
 import cv2
