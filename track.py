@@ -186,7 +186,7 @@ if __name__ == '__main__':
     opt = parser.parse_args()
     print(opt, end='\n\n')
  
-    if not opt.test-mot16:
+    if not opt.test_mot16:
         seqs_str = '''MOT17-02-SDP
                       MOT17-04-SDP
                       MOT17-05-SDP
@@ -204,7 +204,8 @@ if __name__ == '__main__':
                      MOT16-08
                      MOT16-12
                      MOT16-14'''
-        data_root = '/home/wangzd/datasets/MOT/MOT16/images/test'
+        #data_root = '/home/wangzd/datasets/MOT/MOT16/images/test'
+        data_root = '/content/MOT16/test'
     seqs = [seq.strip() for seq in seqs_str.split()]
 
     main(opt,
