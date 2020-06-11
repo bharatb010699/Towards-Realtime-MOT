@@ -25,31 +25,50 @@ def train(
         freeze_backbone=False,
         opt=None,
 ):
-    # The function starts
 
     timme = strftime("%Y-%d-%m %H:%M:%S", gmtime())
     timme = timme[5:-3].replace('-', '_')
     timme = timme.replace(' ', '_')
     timme = timme.replace(':', '_')
-    weights_to = osp.join(weights_to, 'run' + timme)
-    mkdir_if_missing(weights_to)
+    weights_to = osp.join(weights_to, 'run' + timme) # osp is os.path module
+    mkdir_if_missing(weights_to) # make directory only if the directory does not exist
     if resume:
         latest_resume = osp.join(weights_from, 'latest.pt')
 
     torch.backends.cudnn.benchmark = True  # unsuitable for multiscale
+    """
+    NOTE on benchmark mode:
+    In case the input size does not change across iterations, we can use
+    benchmark mode. This typically leads to faster runtime. However, in case
+    input size varies across iterations, performance may get worse. 
+    """
 
     # Configure run
-    f = open(data_cfg)
+    f = open(data_cfg) # 'f' is the ccmcpe.json file present in cfg/ directory
     data_config = json.load(f)
     trainset_paths = data_config['train']
     dataset_root = data_config['root']
     f.close()
 
-    transforms = T.Compose([T.ToTensor()])
+    transforms = T.Compose([T.ToTensor()]) # this will convert the numpy images to torch images
+
     # Get dataloader
     dataset = JointDataset(dataset_root, trainset_paths, img_size, augment=True, transforms=transforms)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True,
                                              num_workers=8, pin_memory=True, drop_last=True, collate_fn=collate_fn)
+    """
+    *************************Arguments of DataLoader: (As per the documentation)******************************
+    dataset: Dataset from which to load the data.
+    batch_size: Specifies the number of samples per batch to load.
+    shuffle: Whether we want the data to be reshuffled at every epoch (True) or not (False).
+    num_workers: Number of subprocesses to use for data loading.
+    pin_memory: If 'True', the data loader will copy tensors into CUDA pinned memory (taking help of DMA)
+                before returning them.
+    drop_last: If set to 'True', the last incomplete batch is dropped, where incompleteness implies that the
+                dataset size is not divisible by the batch size.
+    collate_fn: It merges a list of samples to form a mini-batch.
+    """
+    
     # Initialize model
     model = Darknet(cfg, dataset.nID)
 
@@ -62,8 +81,8 @@ def train(
         model.load_state_dict(checkpoint['model'])
         model.cuda().train()
 
-        # Set optimizer
-        optimizer = torch.optim.SGD(filter(lambda x: x.requires_grad, model.parameters()), lr=opt.lr, momentum=.9)
+        # Set optimizer - Here, Stochastic Gradient Descent (SGD)
+        optimizer = torch.optim.SGD(filter(lambda x: x.requires_grad, model.parameters()), lr=opt.lr, momentum=.9) # lr: learning rate
 
         start_epoch = checkpoint['epoch'] + 1
         if checkpoint['optimizer'] is not None:
@@ -86,13 +105,17 @@ def train(
         optimizer = torch.optim.SGD(filter(lambda x: x.requires_grad, model.parameters()), lr=opt.lr, momentum=.9,
                                     weight_decay=1e-4)
 
-    model = torch.nn.DataParallel(model)
+    model = torch.nn.DataParallel(model) # Make the model run parallely on multiple GPUs.
     # Set scheduler
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
                                                      milestones=[int(0.5 * opt.epochs), int(0.75 * opt.epochs)],
                                                      gamma=0.1)
-
-    # An important trick for detection: freeze bn during fine-tuning
+    """
+    The torch.optim.lr_scheduler.MultiStepLR() decays the learning rate by gamma (here, 0.1) once the number of
+    epoch reaches one of the milestones. So, here, the learning rate would decrease twice, each time by 0.1
+    """
+    
+    # An important trick for detection: freeze batch-normalization during fine-tuning
     if not opt.unfreeze_bn:
         for i, (name, p) in enumerate(model.named_parameters()):
             p.requires_grad = False if 'batch_norm' in name else True
@@ -184,17 +207,24 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=30, help='number of epochs')
     parser.add_argument('--batch-size', type=int, default=32, help='size of each image batch')
     parser.add_argument('--accumulated-batches', type=int, default=1, help='number of batches before optimizer step')
-    parser.add_argument('--cfg', type=str, default='cfg/yolov3.cfg', help='cfg file path')
+    parser.add_argument('--cfg', type=str, default='cfg/yolov3.cfg', help='cfg file path') # Path to the configuration file.
+    """
+    NOTE: In the folder cfg/, currently there are three configuration files:
+    yolov3_576x320.cfg
+    yolov3_864x480.cfg
+    yolov3_1088x608.cfg
+    This argument needs to be supplied with appropriate file name.
+    """
     parser.add_argument('--weights-from', type=str, default='weights/',
                         help='Path for getting the trained model for resuming training (Should only be used with '
-                             '--resume)')
+                             '--resume)') 
     parser.add_argument('--weights-to', type=str, default='weights/',
                         help='Store the trained weights after resuming training session. It will create a new folder '
                              'with timestamp in the given path')
     parser.add_argument('--save-model-after', type=int, default=10,
                         help='Save a checkpoint of model at given interval of epochs')
     parser.add_argument('--data-cfg', type=str, default='cfg/ccmcpe.json', help='coco.data file path')
-    parser.add_argument('--img-size', type=int, default=[1088, 608], nargs='+', help='pixels')
+    parser.add_argument('--img-size', type=int, default=[1088, 608], nargs='+', help='pixels') # Size of image (in pixels)
     parser.add_argument('--resume', action='store_true', help='resume training flag')
     parser.add_argument('--print-interval', type=int, default=40, help='print interval')
     parser.add_argument('--test-interval', type=int, default=9, help='test interval')
