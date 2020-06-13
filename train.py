@@ -74,7 +74,7 @@ def train(
 
     cutoff = -1  # backbone reaches to cutoff layer
     start_epoch = 0
-    if resume:
+    if resume: """ Say, we have saved a 'state' of the system, and we want to continue from that state """
         checkpoint = torch.load(latest_resume, map_location='cpu')
 
         # Load weights to resume from
@@ -175,6 +175,7 @@ def train(
             if i % opt.print_interval == 0:
                 logger.info(s)
 
+        # Inner for loop ends here
         # Save latest checkpoint
         checkpoint = {'epoch': epoch,
                       'model': model.module.state_dict(),
